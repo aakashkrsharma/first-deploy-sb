@@ -1,15 +1,13 @@
-# Use official lightweight OpenJDK image
-FROM openjdk:17-jdk-alpine
+# Stage 1: Build the application with Maven
+FROM openjdk:17-jdk-alpine AS build
 
-# Set working directory inside container
 WORKDIR /app
 
-# Copy Maven wrapper and project files
+# Copy maven wrapper and pom files
 COPY .mvn .mvn
 COPY mvnw .
 COPY pom.xml .
 
-# Make Maven wrapper executable
 RUN chmod +x mvnw
 
 # Download dependencies
@@ -18,11 +16,19 @@ RUN ./mvnw dependency:go-offline -B
 # Copy source code
 COPY src src
 
-# Package the application
+# Build the jar file (skip tests)
 RUN ./mvnw package -DskipTests
 
-# Run the app (replace the jar name below if needed)
-CMD ["java", "-jar", "target/*.jar"]
+# Stage 2: Create smaller runtime image
+FROM openjdk:17-jdk-alpine
 
-# Expose port 8080
+WORKDIR /app
+
+# Copy the jar from the build stage and rename it for simplicity
+COPY --from=build /app/target/first-deploy-0.0.1-SNAPSHOT.jar app.jar
+
+# Expose port 8080 to the outside
 EXPOSE 8080
+
+# Run the application
+ENTRYPOINT ["java", "-jar", "app.jar"]
